@@ -723,6 +723,124 @@ end
 
 print("day 16, task 2: ", day162(), "\n")
 
+function day171(yt = (-86, -59))
+  a = -(yt[1]+1)
+  round(Int, a*(a+1)/2)
+end
+
+print("day 17, task 1: ", day171(), "\n")
+
+function trajectory(vx, vy, steps)
+  p = zeros(Int, steps+1, 2)
+  v = [vx, vy]
+  for i in 1:steps
+    p[i+1,:] .= p[i,:] .+ v
+    v .-= [v[1] == 0 ? 0 : 1, 1]
+  end
+  p
+end
+
+function day172(xt = (209,238), yt = (-86,-59))
+  vxs = 1:xt[2]
+  vys = yt[1]:(-yt[1])
+  steps = -2yt[1]
+  count = 0
+  for vx in vxs, vy in vys
+    tr = trajectory(vx, vy, steps)
+    count += any((xt[1] .<= tr[:,1] .<= xt[2]) .& (yt[1] .<= tr[:,2] .<= yt[2]))
+  end
+  count
+end
+
+print("day 17, task 2: ", day172(), "\n")
+
+# DON'T do it recusively, but iterate through chars
+parse_snailnumber(string) = Any[try parse(Int, x) catch _ x end for x in string]
+add_snailnumbers(a, b) = vcat('[', a, ',', b, ']')
+
+function split_snailnumber(sn)
+  sn = copy(sn)
+  for (i, x) in enumerate(sn)
+    if isa(x, Int) && x > 9
+      sn[i] = add_snailnumbers(floor(Int, x/2), ceil(Int, x/2))
+      return vcat(sn...), true
+    end
+  end
+  sn, false
+end
+
+function add_explosion!(sn, I, v)
+  for j in I
+    if isa(sn[j], Int)
+      sn[j] += v
+      break
+    end
+  end
+end
+
+function explode_snailnumber(sn)
+  level = 0
+  for (i, x) in enumerate(sn)
+    if x == '['
+      level += 1
+    elseif x == ']'
+      level -= 1
+    elseif x == ',' && level >= 5
+      sn = copy(sn)
+      add_explosion!(sn, (i-2):-1:1, sn[i-1])
+      add_explosion!(sn, (i+2):length(sn), sn[i+1])
+      return vcat(sn[1:i-3], 0, sn[i+3:end]), true
+    end
+  end
+  sn, false
+end
+
+magnitude(sn) = magnitude_rec(eval(Meta.parse(join(sn))))
+
+function magnitude_rec(sn)
+  a = isa(sn[1], Int) ? sn[1] : magnitude_rec(sn[1])
+  b = isa(sn[2], Int) ? sn[2] : magnitude_rec(sn[2])
+  3a + 2b
+end
+
+function reduce_snailnumber(sn)
+  while true
+    sn, changed = explode_snailnumber(sn)
+    changed && continue
+    sn, changed = split_snailnumber(sn)
+    changed && continue
+    return sn
+  end
+end
+
+function day181(path = "data/18.txt")
+  numbers = parse_snailnumber.(readlines(path))
+  sn = foldl(numbers) do a, b
+    sn = add_snailnumbers(a, b) |> reduce_snailnumber
+  end
+  magnitude(sn)
+end
+
+print("day 18, task 1: ", day181(), "\n")
+
+function day182(path = "data/18.txt")
+  numbers = parse_snailnumber.(readlines(path))
+  mags = magnitude.(numbers)
+  n = length(numbers)
+  mag_ub(i,j) = 3*mags[i] + 2mags[j] # upper bound for magnitude
+  mag(i, j) = add_snailnumbers(numbers[i], numbers[j]) |> reduce_snailnumber |> magnitude
+  m = 0
+  # this is probably a waste of code space and does not save any time...
+  for i in 1:n, j in 1:n
+    if mag_ub(i, j) >= m
+      m = max(m, mag(i, j))
+    end
+  end
+  m
+end
+
+print("day 18, task 2: ", day182(), "\n")
+
 using LinearAlgebra
 
 function rotation_matrices() # all 3d-rotation matrices attainable by 90 degree angles
@@ -799,3 +917,35 @@ function day192(path = "data/19.txt")
 end
 
 print("day 19, task 2: ", day192(), "\n")
+
+
+brightness(x :: Char) = x == '#' ? 1 : 0
+
+function enhance_image((input, bg), algo)
+  input_ext = fill(bg, size(input) .+ 6)
+  input_ext[4:end-3, 4:end-3] .= input
+  output = map(CartesianIndices(size(input) .+ 4)) do I
+    i, j = Tuple(I) .+ 1
+    bits = reshape(input_ext[i-1:i+1, j-1:j+1]', :)
+    index = parse(Int, join(bits), base = 2) + 1 # julia starts at index 1!
+    algo[index]
+  end
+  output, bg == 0 ? algo[1] : algo[end]
+end
+
+function day201(path = "data/20.txt", steps = 2)
+  lines = readlines(path)
+  algo = brightness.(collect(lines[1]))
+  input = mapreduce(line -> brightness.(collect(line))', vcat, lines[3:end])
+  output, bg = input, 0
+  for _ in 1:steps
+    output, bg = enhance_image((output, bg), algo)
+  end
+  sum(output)
+end
+
+print("day 20, task 1: ", day201(), "\n")
+
+day202(path = "data/20.txt") = day201(path, 50)
+
+print("day 20, task 2: ", day202(), "\n")
